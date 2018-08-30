@@ -1,18 +1,35 @@
 package observable.base;
 
 import io.reactivex.Observable;
+import io.reactivex.ObservableEmitter;
 import io.reactivex.ObservableOnSubscribe;
 import io.reactivex.ObservableSource;
-import io.reactivex.functions.BooleanSupplier;
+import io.reactivex.functions.BiFunction;
+import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
+import io.reactivex.observables.GroupedObservable;
 import io.reactivex.schedulers.Schedulers;
+import observable.base.bean.Student;
 import org.reactivestreams.Publisher;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class Base {
+    private static List<Student> studentList = new ArrayList<>();
+
+    static {
+        studentList.add(new Student("Ben", 1, 11));
+        studentList.add(new Student("Mike", 2, 11));
+        studentList.add(new Student("Susan", 3, 11));
+        studentList.add(new Student("Kate", 1, 12));
+        studentList.add(new Student("Tom", 1, 13));
+        studentList.add(new Student("John", 2, 12));
+        studentList.add(new Student("Leo", 3, 13));
+        studentList.add(new Student("Sam", 2, 13));
+
+    }
+
     public static void main(String[] args) {
         System.out.println("hello world");
 //        interval();
@@ -22,7 +39,14 @@ public class Base {
 //        emptyErrorNever();
 //        from();
 //        just();
-        repeat();
+//        repeat();
+//        timer();
+//        mapCast();
+//        flatMapContactMap();
+//        flatMapIterable();
+//        buffer();
+//        groupBy();
+        scan();
     }
 
     public static void interval() {
@@ -139,5 +163,92 @@ public class Base {
         observable.repeatUntil(() -> System.currentTimeMillis() / 1000 % 4 >= 3).subscribe(s -> System.out.println("repeatUntil:onNext," + s));
         observable.repeatWhen(objectObservable -> objectObservable.take(1)).subscribe(s -> System.out.println("repeatWhen:onNext" + s));
 
+    }
+
+    public static void timer() {
+        Observable.timer(2, TimeUnit.SECONDS, Schedulers.trampoline()).subscribe(System.out::println);
+    }
+
+    public static void mapCast() {
+        Observable.range(5, 5).map(integer -> String.valueOf(integer % 2)).subscribe(System.out::println);
+        Observable.just(new Date()).cast(Object.class).subscribe(System.out::println);
+
+    }
+
+    public static void flatMapContactMap() {
+        Observable<Integer> observable = Observable.range(5, 5);
+        Observable.range(5, 5).flatMap((Function<Integer, ObservableSource<?>>) integer -> Observable.just(integer).delay(integer == 6 ? 500 : 0, TimeUnit.MILLISECONDS, Schedulers.trampoline())).subscribe(System.out::print);
+        System.out.println();
+        observable.flatMap(integer -> Observable.just(integer), true, 2, 2).subscribe(integer -> {
+            System.out.println(System.currentTimeMillis() + "" + integer);
+        });
+
+        observable.flatMap(integer -> Observable.create((ObservableOnSubscribe<Integer>) emitter -> {
+            emitter.onNext(200);
+            emitter.onError(new Throwable("201"));
+        }), throwable -> null, () -> null)
+                .subscribe(integer -> System.out.println("flatMap:onNext," + integer),
+                        throwable -> System.out.println("flatMap:onError," + throwable.getMessage()),
+                        () -> System.out.println("flatMap:onComplete"));
+
+        System.out.println();
+        Observable.range(2, 5).concatMap(integer -> Observable.just(integer).repeat(integer - 1)).subscribe(System.out::print);
+    }
+
+    public static void flatMapIterable() {
+        Observable.just("aaa", "bbb", "ccc")
+                .flatMapIterable(Collections::singletonList).subscribe(System.out::println);
+        Observable.just("ddd", "eee", "fff")
+                .flatMapIterable(Collections::singletonList, (s, s2) -> {
+                    return s.equals("eee") ? s : "";
+                })
+                .subscribe(System.out::println);
+    }
+
+    public static void buffer() {
+        Observable<Integer> integerObservable = Observable.range(5, 5);
+        integerObservable
+                .buffer(2, 2)
+                .subscribe(list -> {
+                    for (Integer integer : list) {
+                        System.out.print(integer);
+                    }
+                    System.out.println();
+                });
+        Observable.interval(2, TimeUnit.SECONDS, Schedulers.trampoline()).buffer(2, 2, TimeUnit.SECONDS)
+                .subscribe(list -> {
+                    for (long integer : list) {
+                        System.out.print(integer);
+                    }
+                    System.out.println();
+                });
+
+    }
+
+    public static void groupBy() {
+        Observable<Integer> integerObservable = Observable.range(5, 5);
+        integerObservable.groupBy(new Function<Integer, Integer>() {
+            @Override
+            public Integer apply(Integer integer) throws Exception {
+                return integer % 2;
+            }
+        })
+                .subscribe(integerIntegerGroupedObservable -> System.out.println(integerIntegerGroupedObservable.getKey()));
+        Observable<GroupedObservable<Integer, Integer>> observable = Observable.concat(
+                Observable.range(1, 4), Observable.range(1, 6)).groupBy(integer -> integer);
+        Observable.concat(observable).subscribe(integer -> System.out.println("groupBy : " + integer));
+        Observable<GroupedObservable<Integer, Student>> groupedObservable = Observable.fromIterable(studentList).groupBy(student -> student.getClassId());
+        Observable.concat(groupedObservable).subscribe(student -> {
+            System.out.println(student.toString());
+        });
+        groupedObservable.subscribe(integerStudentGroupedObservable -> {
+            System.out.println(integerStudentGroupedObservable.getKey());
+        });
+
+    }
+
+    public static void scan() {
+        Observable<Integer> integerObservable = Observable.range(5, 5);
+        integerObservable.scan((integer, integer2) -> integer + integer2).subscribe(System.out::println);
     }
 }
