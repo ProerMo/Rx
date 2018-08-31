@@ -7,6 +7,7 @@ import io.reactivex.ObservableSource;
 import io.reactivex.functions.BiFunction;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 import io.reactivex.observables.GroupedObservable;
 import io.reactivex.schedulers.Schedulers;
 import observable.base.bean.Student;
@@ -46,7 +47,14 @@ public class Base {
 //        flatMapIterable();
 //        buffer();
 //        groupBy();
-        scan();
+//        scan();
+//        window();
+//        filter();
+//        element();
+//        distinct();
+//        skip();
+//        take();
+        throttle();
     }
 
     public static void interval() {
@@ -250,5 +258,114 @@ public class Base {
     public static void scan() {
         Observable<Integer> integerObservable = Observable.range(5, 5);
         integerObservable.scan((integer, integer2) -> integer + integer2).subscribe(System.out::println);
+        integerObservable.scan(10, (i, i2) -> i + i2).subscribe(System.out::println);
+    }
+
+    public static void window() {
+        Observable<Integer> integerObservable = Observable.range(5, 5);
+        integerObservable.window(2, 2).subscribe(observable -> {
+            System.out.println(observable);
+            observable.subscribe(System.out::println);
+        });
+//        integerObservable.window(new Callable<ObservableSource<Integer>>() {
+//            @Override
+//            public ObservableSource<Integer> call() throws Exception {
+//                return Observable.just(1);
+//            }
+//        }).subscribe(new Consumer<Observable<Integer>>() {
+//            @Override
+//            public void accept(Observable<Integer> integerObservable) throws Exception {
+//
+//            }
+//        });
+    }
+
+    public static Observable<Integer> integerObservable = Observable.range(5, 5);
+
+    public static void filter() {
+        integerObservable.filter(integer -> integer % 2 == 0).subscribe(System.out::println);
+    }
+
+    public static void element() {
+        integerObservable.elementAt(2, 4).subscribe(System.out::println);
+        integerObservable.elementAtOrError(10)
+                .subscribe(integer -> System.out.println("onNext:" + integer), throwable -> System.out.println("onError"));
+        integerObservable.firstElement().subscribe(integer -> System.out.println("firstElement" + integer));
+        integerObservable.lastElement().subscribe(integer -> System.out.println("lastElement" + integer));
+        integerObservable.ignoreElements().subscribe(() -> System.out.println("ignoreElement"));
+        //observable中数据要为单个，否则会报错
+        integerObservable.singleElement().subscribe(integer -> System.out.println("singleElement" + integer));
+    }
+
+    public static void distinct() {
+        Observable<Integer> observable = Observable.just(1, 2, 3, 3, 1);
+        observable.distinct().subscribe(integer -> {
+            System.out.println("distinct:" + integer);
+        });
+        //distinct里面带有function是用来过滤重复后进行处理然后生成新的Observable将数据往下传
+        observable.distinct(integer -> integer)
+                .subscribe(System.out::println);
+        //只有相邻的重复才会去重
+        observable.distinctUntilChanged()
+                .subscribe(integer -> System.out.println("distinctUntilChange:" + integer));
+    }
+
+    private static Consumer<Object> printlnConsumer = o -> System.out.println(o);
+
+    private static Consumer<Object> getCustomerConsumer(String tag) {
+        return o -> System.out.println(tag + ":" + o);
+    }
+
+    public static void skip() {
+        integerObservable.skip(1).subscribe(getCustomerConsumer("skip"));
+        integerObservable.skipLast(2).subscribe(getCustomerConsumer("skipLast"));
+//        integerObservable.skipUntil(observer -> observer.onComplete()).subscribe(getCustomerConsumer("skipUntil"));
+        Observable.intervalRange(1, 5, 0, 1, TimeUnit.SECONDS, Schedulers.trampoline())
+                .skipUntil(Observable.intervalRange(6, 5, 3, 1, TimeUnit.SECONDS))
+                .subscribe(getCustomerConsumer("skipUntil"));
+//        Observable.just(4, 5, 6, 7, 8).skipWhile(integer -> integer > 6).subscribe(getCustomerConsumer("skipWhile"));
+        //上面方法不生效？？？
+        Observable.just(4, 5, 6, 7, 8).skipWhile(integer -> integer < 6).subscribe(getCustomerConsumer("skipWhile"));
+    }
+
+    /**
+     * take2:5
+     * take2:6
+     * takeLast:8
+     * takeLast:9
+     * takeUntil:1
+     * takeUntil:2
+     * takeUntil:3
+     * takeWhile:5
+     */
+    public static void take() {
+        integerObservable.take(2).subscribe(getCustomerConsumer("take2"));
+        integerObservable.takeLast(2).subscribe(getCustomerConsumer("takeLast"));
+        Observable.intervalRange(1, 5, 0, 1, TimeUnit.SECONDS, Schedulers.trampoline())
+                .takeUntil(Observable.intervalRange(6, 5, 3, 1, TimeUnit.SECONDS))
+                .subscribe(getCustomerConsumer("takeUntil"));
+        integerObservable.takeWhile(integer -> integer < 6).subscribe(getCustomerConsumer("takeWhile"));
+    }
+
+    public static void throttle() {
+        Observable<Long> timeObservable = Observable.interval(500, TimeUnit.MILLISECONDS, Schedulers.trampoline());
+//        timeObservable.throttleFirst(300, TimeUnit.MILLISECONDS)
+//                .subscribe(getCustomerConsumer("throttleFirst300"));
+//        timeObservable.throttleFirst(500, TimeUnit.MILLISECONDS)
+//                .subscribe(getCustomerConsumer("throttleFirst500"));
+//        timeObservable.throttleFirst(800, TimeUnit.MILLISECONDS)
+//                .subscribe(getCustomerConsumer("throttleFirst800"));
+//        timeObservable.throttleFirst(1000, TimeUnit.MILLISECONDS)
+//                .subscribe(getCustomerConsumer("throttleFirst1000"));
+//        timeObservable.throttleLast(800, TimeUnit.MILLISECONDS)
+//                .subscribe(getCustomerConsumer("throttleLast300"));
+//        timeObservable.throttleLatest(1300, TimeUnit.MILLISECONDS)
+//                .subscribe(getCustomerConsumer("throttleLatest"));
+        timeObservable.throttleWithTimeout(400,TimeUnit.MILLISECONDS)
+                .subscribe(getCustomerConsumer("throttleWithTimeout"));
+    }
+
+    public static void debounce(){
+
     }
 }
