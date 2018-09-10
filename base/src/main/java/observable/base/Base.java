@@ -1,18 +1,16 @@
 package observable.base;
 
+import io.reactivex.*;
 import io.reactivex.Observable;
-import io.reactivex.ObservableEmitter;
-import io.reactivex.ObservableOnSubscribe;
-import io.reactivex.ObservableSource;
-import io.reactivex.functions.BiFunction;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
-import io.reactivex.functions.Predicate;
 import io.reactivex.observables.GroupedObservable;
+import io.reactivex.processors.PublishProcessor;
 import io.reactivex.schedulers.Schedulers;
 import observable.base.bean.Student;
 import org.reactivestreams.Publisher;
 
+import javax.xml.ws.http.HTTPException;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -54,7 +52,29 @@ public class Base {
 //        distinct();
 //        skip();
 //        take();
-        throttle();
+//        throttle();
+//        debounce();
+//        sample();
+//        startWith();
+//        merge();
+//        concat();
+//        zip();
+//        combineLatest();
+//        delay();
+//        doSth();
+//        timeout();
+//        onErrorHandle();
+//        retry();
+//        allAny();
+//        containsIsEmpty();
+//        sequenceEqual();
+//        amb();
+//        defaultIfEmpty();
+//        toList();
+//        toMap();
+//        to();
+//        backpressure();
+        backpressure1();
     }
 
     public static void interval() {
@@ -214,6 +234,17 @@ public class Base {
     }
 
     public static void buffer() {
+        List<Integer> integerList = new ArrayList<>();
+        integerList.add(2);
+        integerList.add(4);
+        integerList.add(6);
+        integerList.add(8);
+        integerList.add(10);
+        Observable.fromIterable(integerList)
+                .buffer(2, 2)
+                .subscribe(list -> {
+                    System.out.println(list.toString() + list.get(0) + "---" + list.size());
+                });
         Observable<Integer> integerObservable = Observable.range(5, 5);
         integerObservable
                 .buffer(2, 2)
@@ -361,11 +392,277 @@ public class Base {
 //                .subscribe(getCustomerConsumer("throttleLast300"));
 //        timeObservable.throttleLatest(1300, TimeUnit.MILLISECONDS)
 //                .subscribe(getCustomerConsumer("throttleLatest"));
-        timeObservable.throttleWithTimeout(400,TimeUnit.MILLISECONDS)
+        timeObservable.throttleWithTimeout(400, TimeUnit.MILLISECONDS)
                 .subscribe(getCustomerConsumer("throttleWithTimeout"));
     }
 
-    public static void debounce(){
+    public static Observable<String> timeObservable = Observable.create(emitter -> {
+        emitter.onNext("1");
+        Thread.sleep(300);
+        emitter.onNext("2");
+        Thread.sleep(700);
+        emitter.onNext("3");
+        Thread.sleep(500);
+        emitter.onNext("4");
+        Thread.sleep(200);
+        emitter.onComplete();
+    });
+
+    /**
+     * hello world
+     * debounce:2
+     * debounce:3
+     * debounce:4
+     * 两次发射间隔小于timeout则取后面一次
+     */
+    public static void debounce() {
+        timeObservable.debounce(400, TimeUnit.MILLISECONDS)
+                .subscribe(getCustomerConsumer("debounce"));
+    }
+
+    /**
+     * hello world
+     * sample:2
+     * sample:3
+     * sample:4
+     * 同上
+     */
+    public static void sample() {
+//        debounce();
+        timeObservable.sample(400, TimeUnit.MILLISECONDS)
+                .subscribe(getCustomerConsumer("sample"));
+    }
+
+    public static void startWith() {
+        //在前面插入一个2
+        integerObservable.startWith(2)
+                .subscribe(getCustomerConsumer("startWith"));
+        List<Integer> i = new ArrayList<Integer>();
+        i.add(11);
+        i.add(22);
+        i.add(33);
+        i.add(44);
+        //将list中的插入到前面
+        integerObservable.startWith(i).subscribe(getCustomerConsumer("startWith"));
+        //将1,3,4插入到前面
+        integerObservable.startWithArray(1, 3, 4).subscribe(getCustomerConsumer("startWithArray"));
+    }
+
+    /**
+     * hello world
+     * merge:123
+     * merge:321
+     * merge:111
+     * merge:333
+     */
+    public static void merge() {
+        Observable.merge(timeObservable, timeObservable).subscribe(getCustomerConsumer("merge"));
+        Observable.merge(
+                Observable.interval(1, TimeUnit.SECONDS, Schedulers.trampoline()).map(new Function<Long, String>() {
+                    @Override
+                    public String apply(Long aLong) throws Exception {
+                        return "A" + aLong;
+                    }
+                }),
+                Observable.interval(1, TimeUnit.SECONDS, Schedulers.trampoline()).map(new Function<Long, String>() {
+                    @Override
+                    public String apply(Long aLong) throws Exception {
+                        return "B" + aLong;
+                    }
+                }))
+                .subscribeOn(Schedulers.trampoline())
+                .observeOn(Schedulers.trampoline())
+                .subscribe(System.out::println);
+    }
+
+    //merge跟concat类似都是将多个发射源合并发射，区别是concat是按照发射源顺序发射，发完一个再到另外一个，而merge不是。
+    public static void concat() {
+        Observable.concat(Observable.create(emitter -> {
+            emitter.onNext(123);
+            Thread.sleep(2000);
+            emitter.onNext(321);
+            emitter.onComplete();
+        }), Observable.create((ObservableOnSubscribe<Integer>) emitter -> {
+            emitter.onNext(111);
+            emitter.onNext(333);
+            emitter.onComplete();
+        })).subscribe(getCustomerConsumer("concat"));
+    }
+
+    //将两个发射源的数据自定义规则进行处理然后输入，输出的数量以发射源中最少的个数
+    public static void zip() {
+        Observable<Integer> observable = Observable.range(5, 4);
+        Observable.zip(integerObservable, observable, (integer, integer2) -> String.valueOf(integer * integer2)).subscribe(System.out::println);
+        Observable<Long> observableTime = Observable.interval(1, TimeUnit.SECONDS, Schedulers.trampoline());
+        Observable.zip(timeObservable, Observable.create(emitter -> {
+            emitter.onNext("1");
+            Thread.sleep(300);
+            emitter.onNext("2");
+            Thread.sleep(200);
+            emitter.onNext("3");
+            Thread.sleep(200);
+            emitter.onNext("4");
+            Thread.sleep(200);
+            emitter.onComplete();
+        }), (s, s2) -> s + s2).subscribe(System.out::println);
+    }
+
+    /**
+     * a4
+     * b4
+     * c4
+     * d4
+     * <p>
+     * 1d
+     * 2d
+     * 3d
+     * 4d
+     * https://blog.csdn.net/jdsjlzx/article/details/53040293
+     * Android用RxJava combineLatest操作符处理复杂表单验证问题
+     */
+    public static void combineLatest() {
+        Observable.combineLatest(Observable.range(1, 6), Observable.range(6, 7), (i, i1) -> i * i1).subscribe(System.out::println);
+        Observable.combineLatest(Observable.just(1, 2, 3), Observable.just(1, 2, 3), (u, u1) -> u + "" + u1).subscribe(System.out::println);
+        Observable.combineLatest(Observable.create(emitter -> {
+            emitter.onNext("a");
+            Thread.sleep(300);
+            emitter.onNext("b");
+            Thread.sleep(2000);
+            emitter.onNext("c");
+            Thread.sleep(200);
+            emitter.onNext("d");
+            Thread.sleep(200);
+            emitter.onComplete();
+        }), timeObservable, (i, u) -> u + i).subscribe(System.out::println);
 
     }
+
+    public static void delay() {
+        Observable.range(5, 5).delay(2, TimeUnit.SECONDS)
+                .subscribe(getCustomerConsumer("delay"));
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public static void doSth() {
+        Observable.range(1, 5)
+                .doOnEach(integerNotification -> System.out.println("Each : " + integerNotification.getValue()))
+                .doOnComplete(() -> System.out.println("complete"))
+                .doFinally(() -> System.out.println("finally"))
+                .doAfterNext(i -> System.out.println("after next : " + i))
+                .doOnSubscribe(disposable -> System.out.println("subscribe"))
+                .doOnTerminate(() -> System.out.println("terminal"))
+                .subscribe(i -> System.out.println("subscribe : " + i));
+    }
+
+    public static void timeout() {
+        Observable.interval(1000, 200, TimeUnit.MILLISECONDS, Schedulers.trampoline())
+                .timeout(500, TimeUnit.MILLISECONDS, Observable.rangeLong(1, 5))
+                .subscribe(getCustomerConsumer("timeout"));
+
+    }
+
+    public static void onErrorHandle() {
+        HTTPException exception = new HTTPException(404);
+        Observable<Integer> observable = Observable.create(emitter -> {
+            emitter.onError(exception);
+            emitter.onNext(123);
+        });
+        observable.onErrorReturn(throwable -> 111).subscribe(getCustomerConsumer("onErrorReturn"));
+        observable.onErrorResumeNext(Observable.range(1, 5)).subscribe(getCustomerConsumer("onErrorResumeNext"));
+        observable.onErrorReturnItem(234).subscribe(getCustomerConsumer("onErrorReturnItem"));
+        observable.onErrorResumeNext(throwable -> {
+            return Observable.create(emitter -> emitter.onNext(((HTTPException) throwable).getStatusCode()));
+        }).subscribe(getCustomerConsumer("onErrorResumeNext"));
+
+    }
+
+    public static void retry() {
+        Observable.create(((ObservableOnSubscribe<Integer>) emitter -> {
+            emitter.onNext(0);
+            emitter.onError(new Throwable("Error1"));
+            emitter.onError(new Throwable("Error2"));
+        })).retry(2).subscribe(i -> System.out.println("onNext : " + i), error -> System.out.print("onError : " + error));
+    }
+
+    public static void allAny() {
+        Observable.range(5, 5).all(i -> i > 5).subscribe(System.out::println); // false
+        Observable.range(5, 5).any(i -> i > 5).subscribe(System.out::println); // true
+    }
+
+    public static void containsIsEmpty() {
+        Observable.range(5, 5).contains(4).subscribe(System.out::println); // false
+        Observable.range(5, 5).isEmpty().subscribe(System.out::println); // false
+        Observable.create(emitter -> {
+            emitter.onNext("");
+        }).isEmpty().subscribe(getCustomerConsumer("isEmpty"));
+        Observable.empty().isEmpty().subscribe(getCustomerConsumer("isEmpty"));
+    }
+
+    public static void sequenceEqual() {
+        Observable.sequenceEqual(Observable.range(1, 5), Observable.range(1, 5)).subscribe(System.out::println);
+    }
+
+    public static void amb() {
+        Observable.amb(Arrays.asList(Observable.range(1, 5), Observable.range(6, 5))).subscribe(System.out::print);
+    }
+
+    public static void defaultIfEmpty() {
+        Observable.create((ObservableOnSubscribe<Integer>) Emitter::onComplete).defaultIfEmpty(6).subscribe(System.out::print);
+    }
+
+    public static void toList() {
+        Observable.range(1, 5).toList().subscribe(System.out::println);
+        Observable.range(1, 5).toSortedList(Comparator.comparingInt(o -> -o)).subscribe(System.out::println);
+    }
+
+    //转换成map
+    public static void toMap() {
+        Observable.range(8, 10).toMap(integer -> integer + 1 + "").subscribe(getCustomerConsumer("toMap"));
+        Observable.range(8, 10).map(integer -> Integer.toHexString(integer)).subscribe(getCustomerConsumer("map"));
+        Observable.range(8, 10).toMap(integer -> Integer.toHexString(integer), integer -> integer).subscribe(getCustomerConsumer("toMap"));
+    }
+
+    public static void to() {
+        Observable.range(5, 5).to(integerObservable -> integerObservable.map(integer -> integer + "")).subscribe(getCustomerConsumer("to"));
+    }
+
+    private static void compute(int i) {
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.println("computing : " + i);
+    }
+
+    private static void backpressure() {
+        Flowable.range(1, 1000).observeOn(Schedulers.computation()).subscribe(integer -> compute(integer));
+
+        try {
+            Thread.sleep(500 * 1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    //.MissingBackpressureException: Could not emit value due to lack of requests
+    private static void backpressure1() {
+        PublishProcessor<Integer> source = PublishProcessor.create();
+        source.observeOn(Schedulers.computation()).subscribe(v -> compute(v), Throwable::printStackTrace);
+        for (int i = 0; i < 1_000_000; i++) source.onNext(i);
+        try {
+            Thread.sleep(10_000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
+
 }
